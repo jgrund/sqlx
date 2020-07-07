@@ -6,7 +6,6 @@ use cargo_metadata::MetadataCommand;
 use std::collections::BTreeMap;
 use std::fs::File;
 
-use std::time::SystemTime;
 use url::Url;
 
 type QueryData = BTreeMap<String, serde_json::Value>;
@@ -75,18 +74,15 @@ fn run_prepare_step(cargo_args: Vec<String>) -> anyhow::Result<QueryData> {
     let cargo = env::var("CARGO")
         .context("`prepare` subcommand may only be invoked as `cargo sqlx prepare``")?;
 
+    let check_status = Command::new(&cargo).arg("clean").status()?;
+
+    if !check_status.success() {
+        bail!("`cargo clean` failed with status: {}", check_status);
+    }
+
     let check_status = Command::new(&cargo)
-        .arg("rustc")
+        .arg("check")
         .args(cargo_args)
-        .arg("--")
-        .arg("--emit")
-        .arg("dep-info,metadata")
-        // set an always-changing cfg so we can consistently trigger recompile
-        .arg("--cfg")
-        .arg(format!(
-            "__sqlx_recompile_trigger=\"{}\"",
-            SystemTime::UNIX_EPOCH.elapsed()?.as_millis()
-        ))
         .status()?;
 
     if !check_status.success() {
